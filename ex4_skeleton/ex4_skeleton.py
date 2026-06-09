@@ -11,6 +11,8 @@ NETWORK_DNS_SERVER_IP = "10.0.2.43"  # Enter the network's DNS server's IP.
 SPOOF_SLEEP_TIME = 2
 
 IFACE = "eth0"  # Enter the network interface you work on.
+ARP_FILTER = "arp"
+NETWORK_SCAN_CIDR = "10.0.2.0/24"
 
 FAKE_GMAIL_IP = SECRATERY_IP  # The ip on which we run
 DNS_FILTER = f"udp port 53 and ip src {DOOFENSHMIRTZ_IP} and ip dst {NETWORK_DNS_SERVER_IP}"  # Scapy filter
@@ -86,6 +88,78 @@ class ArpSpoofer(object):
     def start(self) -> None:
         """
         Starts the ARP spoof process.
+        """
+        p = mp.Process(target=self.run)
+        self.process = p
+        self.process.start()
+
+
+class ArpSpoofDetector(object):
+    def __init__(self, process_list: List[mp.Process]) -> None:
+        process_list.append(self)
+        self.process = None
+        self.ip_to_mac: Dict[str, str] = {}
+
+    def find_ips_by_mac(self, target_mac: str) -> List[str]:
+        """
+        Uses a Scapy ARP scan to find real IPs that answer with target_mac.
+        """
+        request = Ether(dst="ff:ff:ff:ff:ff:ff") / ARP(pdst=NETWORK_SCAN_CIDR)
+        answered, _ = scapy.srp(request, timeout=2, iface=IFACE, verbose=False)
+
+        ips = []
+        for _, response in answered:
+            if response[ARP].hwsrc.lower() == target_mac.lower():
+                ips.append(response[ARP].psrc)
+
+        return sorted(set(ips))
+
+    def inspect_packet(self, pkt: scapy.packet.Packet) -> None:
+        if ARP not in pkt:
+            return
+        ip = pkt[ARP].psrc
+        mac = pkt[ARP].hwsrc
+        if not ip or not mac or ip == "0.0.0.0":
+            return
+
+        mac = mac.lower()
+        old_mac = self.ip_to_mac.get(ip)
+
+        if old_mac is None:
+            self.ip_to_mac[ip] = mac
+
+        elif old_mac != mac:
+            possible_attacker_ips = self.find_ips_by_mac(mac)
+            attacker_hint = "unknown"
+            if possible_attacker_ips:
+                attacker_hint = ", ".join(
+                    attacker_ip for attacker_ip in possible_attacker_ips
+                    if attacker_ip != ip
+                )
+
+            if not attacker_hint:
+                attacker_hint = ", ".join(possible_attacker_ips)
+
+            print(
+                f"[ARP detector] Suspicious ARP change: {ip} was {old_mac}, "
+                f"now {mac}. Possible attacker IP: {attacker_hint}"
+            )
+            self.ip_to_mac[ip] = mac
+
+    def run(self) -> None:
+        """
+        Main loop of the detector process.
+        """
+        while True:
+            try:
+                scapy.sniff(filter=ARP_FILTER, iface=IFACE, prn=self.inspect_packet)
+            except:
+                import traceback
+                traceback.print_exc()
+
+    def start(self) -> None:
+        """
+        Starts the ARP spoof detector process.
         """
         p = mp.Process(target=self.run)
         self.process = p
@@ -239,8 +313,10 @@ class DnsHandler(object):
 if __name__ == "__main__":
     plist = []
     spoofer = ArpSpoofer(plist, DOOFENSHMIRTZ_IP, NETWORK_DNS_SERVER_IP)
+    detector = ArpSpoofDetector(plist)
     server = DnsHandler(plist, SPOOF_DICT)
 
     print("Starting sub-processes...")
     server.start()
+    detector.start()
     spoofer.start()
