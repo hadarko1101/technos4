@@ -101,9 +101,6 @@ class ArpSpoofDetector(object):
         self.ip_to_mac: Dict[str, str] = {}
 
     def find_ips_by_mac(self, target_mac: str) -> List[str]:
-        """
-        Uses a Scapy ARP scan to find real IPs that answer with target_mac.
-        """
         request = Ether(dst="ff:ff:ff:ff:ff:ff") / ARP(pdst=NETWORK_SCAN_CIDR)
         answered, _ = scapy.srp(request, timeout=2, iface=IFACE, verbose=False)
 
@@ -318,5 +315,5 @@ if __name__ == "__main__":
 
     print("Starting sub-processes...")
     server.start()
-    detector.start()
+    detector.start() # parctical part shit
     spoofer.start()
