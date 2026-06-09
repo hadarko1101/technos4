@@ -206,12 +206,12 @@ class DnsHandler(object):
             to = self.spoof_dict[pkt[DNS].qd.qname]
             spoofed_response = self.get_spoofed_dns_response(pkt, to)
             if spoofed_response is not None:
-                scapy.send(spoofed_response, iface=IFACE, verbose=False)
+                scapy.send(spoofed_response, verbose=False)
             return f"Spoofed response for {pkt[DNS].qd.qname.decode()} sent."
         else:
             real_response = self.get_real_dns_response(pkt)
             if real_response is not None:
-                scapy.send(real_response, iface=IFACE, verbose=False)
+                scapy.send(real_response, verbose=False)
             return f"Real response for {pkt[DNS].qd.qname.decode()} sent."
 
     def run(self) -> None:

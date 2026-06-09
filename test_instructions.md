@@ -37,7 +37,7 @@ python ex4_skeleton.py
 ## 4. Test from the Victim
 You can run this one-liner from your Windows terminal to instantly test if the DNS and HTTP spoofing is working:
 ```bash
-docker exec spoof_victim bash -c "dig mail.doofle.com +short && curl -s http://mail.doofle.com"
+docker exec spoof_victim bash -c "echo -n 'doofle IP: ' && dig mail.doofle.com +short | tail -n1 && echo -n 'google IP: ' && dig google.com +short | tail -n1 && if curl -s http://mail.doofle.com | grep -q 'save_password'; then echo '[+] Spoofed content verified'; fi && if ! curl -L -s http://google.com | grep -q 'save_password'; then echo '[+] Google connection OK (Not spoofed)'; fi"
 ```
 *(Or open a terminal inside the container with `docker exec -it spoof_victim bash` and run them manually).*
 
